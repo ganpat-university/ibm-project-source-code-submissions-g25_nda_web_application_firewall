@@ -1,0 +1,144 @@
+main(){
+    choice=$1
+    if [[ ! -z $2 ]]
+    then
+        ipadd=$2
+        clientIp=$2
+    fi
+
+    if [[ 1 == $choice ]]
+    then 
+        if [[ -z $2 ]]
+        then
+            echo -e "enter Ip Address : "
+            read ipadd
+        fi    
+        iptables --table mangle -I PREROUTING -s $ipadd -p tcp --dport 80 -j DROP
+    elif [[ 2 == $choice ]]
+    then 
+        if [[ -z $2 ]]
+        then
+            echo -e "enter Ip Address : "
+            read ipadd
+        fi    
+        iptables --table mangle -D PREROUTING -s $ipadd -p tcp --dport 80 -j DROP
+    elif [[ 3 == $choice ]]
+    then 
+        if [[ -z $2 ]]
+        then
+            echo -e "enter Ip Address : "
+            read ipadd
+        fi    
+        iptables --table mangle -I PREROUTING -s $ipadd -p tcp --dport 22 -j ACCEPT       
+    elif [[ 9 == $choice ]]
+    then 
+        if [[ -z $2 ]]
+        then
+            echo -e "enter Ip Address : "
+            read ipadd
+        fi    
+        iptables --table mangle -D PREROUTING -s $ipadd -p tcp --dport 22 -j ACCEPT       
+
+    elif [[ 4 == $choice ]]
+    then 
+        echo -e "Blocking All SSH\n"
+        if [ -z $(iptables --table mangle -C PREROUTING -p tcp --dport 22 -j DROP) ]
+        then
+            echo -e "Adding Blocking SHH rule\n"
+            iptables --table mangle -A PREROUTING -p tcp --dport 22 -j DROP     
+        else
+            echo -e "Rule Already Exist\n"
+        fi
+
+    elif [[ 5 == $choice ]]
+    then 
+        echo -e "Saving All Changes\n"
+        sudo /sbin/iptables-save
+    elif [[ 6 == $choice ]]
+    then 
+        echo -e "Reset All Rules\n"
+        iptables -F
+    elif [[ 7 == $choice ]]
+    then 
+        echo -e "Adding Client Ip : "
+        firewallIp=$3
+        if [[ -z $2 ]]
+        then
+            echo -e "enter Client Ip Address : "
+            echo -e "enter Ip Address : "
+            read clientIp
+        fi 
+        iptables --table nat --append PREROUTING --protocol tcp --destination $firewallIp --dport 80 --jump DNAT --to-destination $clientIp:80   
+        iptables --table nat --append POSTROUTING --protocol tcp --destination $clientIp --dport 80 --jump SNAT --to-source $firewallIp
+
+        iptables --table nat --append PREROUTING --protocol tcp --destination $firewallIp --dport 22 --jump DNAT --to-destination $clientIp:22
+        iptables --table nat --append POSTROUTING --protocol tcp --destination $clientIp --dport 22 --jump SNAT --to-source $firewallIp
+
+
+    elif [[ 8 == $choice ]]
+    then 
+        echo -e "Remove Client Ip : "
+        
+        firewallIp=$3
+        if [[ -z $2 ]]
+        then
+            echo -e "enter Client Ip Address : "
+            echo -e "enter Ip Address : "
+            read clientIp
+        fi    
+        iptables --table nat -D PREROUTING --protocol tcp --destination $firewallIp --dport 80 --jump DNAT --to-destination $clientIp:80   
+        iptables --table nat -D POSTROUTING --protocol tcp --destination $clientIp --dport 80 --jump SNAT --to-source $firewallIp
+
+        iptables --table nat -D PREROUTING --protocol tcp --destination $firewallIp --dport 22 --jump DNAT --to-destination $clientIp:22
+        iptables --table nat -D POSTROUTING --protocol tcp --destination $clientIp --dport 22 --jump SNAT --to-source $firewallIp
+
+    elif [[ 10 == $choice ]]
+    then 
+        echo -e "Adding  SQL prevention Rules : $ipadd\n"
+        iptables --table mangle -I PREROUTING -p tcp --dport 80 -m string --string $ipadd --algo bm -j DROP     
+
+    elif [[ 11 == $choice ]]
+    then 
+        echo -e "Removing  SQL prevention Rules  : $ipadd \n"
+        iptables --table mangle -D PREROUTING -p tcp  --dport 80 -m string --string $ipadd --algo bm -j DROP
+
+    elif [[ 12 == $choice ]]
+    then 
+        echo -e "Adding DDos Prevention Rule  : \n"
+        iptables --table mangle -A PREROUTING -p tcp --dport 80 -m limit --limit 1/s -j ACCEPT
+        iptables --table mangle -A PREROUTING -p tcp --dport 80 --syn -m limit --limit 1/s -j ACCEPT
+        iptables --table mangle -A PREROUTING -p tcp --dport 80 --tcp-flags SYN,ACK,FIN,RST RST -m limit --limit 1/s -j ACCEPT
+        iptables --table mangle -A PREROUTING -p icmp --dport 80 --icmp-type echo-request -m limit --limit 1/s -j ACCEPT
+
+    fi    
+}
+
+
+if [[ "$USER" != "root" ]]
+then 
+    echo -e "you must bo root user to use this script"
+else    
+    if [[ ! -z $1 ]]
+    then
+        echo -e "command mode\n"
+        main $1 $2 $3
+    else
+        echo -e "CLI mode\n"
+        echo -e "Enter 1 For Adding in Black List\n2 for Removing from Black List : \n"
+        echo -e "3 for Adding in WhiteList for SSH"
+        echo -e "4 for Block All SSH connection"
+        echo -e "5 for saving All Rules"
+        echo -e "6 for Reset All Rules"
+        echo -e "7 for Add Customer ip"
+        echo -e "8 for Remove Customer ip"
+        echo -e "9 for Remove From white list"
+        echo -e "10 for Add SQL prevention Rule"
+        echo -e "11 for Remove SQL prevention Rule"
+        echo -e "12 for Add DDos Prevantion Rule"
+
+        read choice
+
+        main $choice
+
+    fi        
+fi
